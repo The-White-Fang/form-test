@@ -1,4 +1,4 @@
-import { TextInputProps } from "react-native";
+import { TextInputProps } from 'react-native';
 
 export type BasicFormField = {
 	name: string;
@@ -15,7 +15,7 @@ export type TextFormField = BasicFormField & {
 	defaultValue?: string;
 	prefill?: string;
 	isLong?: boolean;
-	textType?: TextInputProps['textContentType'] 
+	textType?: TextInputProps['textContentType'];
 };
 
 export type CheckFormFieldItem = {
@@ -45,6 +45,7 @@ export type SelectFormField = BasicFormField & {
 export type MultiSelectFormField = BasicFormField & {
 	type: 'multiselect';
 	options: SelectFormFieldItem[];
+	placeholder?: string;
 };
 
 export type RadioFormField = BasicFormField & {

@@ -1,9 +1,10 @@
-import { BackHandler, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { CheckboxesFormField, FormConfig, FormField, MultiSelectFormField, RadioFormField, SelectFormField, TextFormField } from './types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Animated, { interpolate, interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import Feather from '@expo/vector-icons/Feather';
 import Fontisto from '@expo/vector-icons/Fontisto';
+import Feather from '@expo/vector-icons/Feather';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BackHandler, KeyboardAvoidingView, Modal, StyleSheet, Text, TextInput, TouchableNativeFeedback, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { FlatList } from 'react-native-gesture-handler';
+import Animated, { interpolate, interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { CheckboxesFormField, FormConfig, FormField, MultiSelectFormField, RadioFormField, SelectFormField, TextFormField } from './types';
 
 type FormProps = {
 	config: FormConfig;
@@ -30,7 +31,7 @@ export default function Form({ config }: FormProps) {
 		const initialValue: { [key: string]: Value } = {};
 		for (const field of config.fields) {
 			if (field.type === 'checkbox' && field.options.length === 1) {
-				initialValue[field.name] = field.options[0].isSelected;
+				initialValue[field.name] = !!field.options[0].isSelected;
 				continue;
 			}
 
@@ -43,7 +44,7 @@ export default function Form({ config }: FormProps) {
 				initialValue[field.name] = field.isNumeric ? parseFloat(field.defaultValue) : NaN;
 			}
 
-			data[field.name] = field.isNumeric ? NaN : '';
+			initialValue[field.name] = field.isNumeric ? NaN : '';
 		}
 
 		setData(initialValue);
@@ -97,8 +98,6 @@ export default function Form({ config }: FormProps) {
 	const next = useCallback(() => setStep((s) => s + 1), []);
 	const prev = useCallback(() => setStep((s) => s - 1), []);
 
-	const showSubmit = formView.length === step + 1;
-
 	const handleChange = useCallback(
 		(name: string, value: Value) => {
 			setData((d) => ({ ...d, [name]: value }));
@@ -106,20 +105,35 @@ export default function Form({ config }: FormProps) {
 		[config],
 	);
 
+	const submit = () => {};
+
+	const hasNext = !!formView[step + 1],
+		hasPrevious = !!formView[step - 1],
+		showSubmit = formView.length === step + 1;
+
 	return (
-		<View>
+		<View style={{ flex: 1, padding: 10 }}>
 			{formView.map((field, i) =>
-				i === step ? (
-					<Field
-						field={field}
-						key={field.name}
-						next={showSubmit ? undefined : next}
-						prev={prev}
-						value={data[field.name]}
-						onChange={(value) => handleChange(field.name, value)}
-					/>
-				) : null,
+				i === step ? <Field field={field} key={field.name} prev={prev} value={data[field.name]} onChange={(value) => handleChange(field.name, value)} /> : null,
 			)}
+			<View style={{ paddingTop: 30, flexDirection: 'row', justifyContent: 'space-between' }}>
+				<TouchableOpacity style={{ flexDirection: 'row' }} disabled={!hasPrevious} onPress={prev}>
+					<Feather name='arrow-left' size={20} color={hasPrevious ? '#1d4ed8' : '#9ca3af'} />
+					<Text style={{ color: hasPrevious ? '#1d4ed8' : '#9ca3af' }}>Back</Text>
+				</TouchableOpacity>
+				{!showSubmit && (
+					<TouchableOpacity style={{ flexDirection: 'row' }} disabled={!hasNext} onPress={next}>
+						<Text style={{ color: hasNext ? '#1d4ed8' : '#9ca3af' }}>Next</Text>
+						<Feather name='arrow-right' size={20} color={hasNext ? '#1d4ed8' : '#9ca3af'} />
+					</TouchableOpacity>
+				)}
+				{showSubmit && (
+					<TouchableOpacity style={{ flexDirection: 'row' }} disabled={!hasNext} onPress={submit}>
+						<Text style={{ color: '#1d4ed8' }}>Submit</Text>
+						<Feather name='arrow-right' size={20} color={hasNext ? '#1d4ed8' : '#1d4ed8'} />
+					</TouchableOpacity>
+				)}
+			</View>
 		</View>
 	);
 }
@@ -132,9 +146,9 @@ function Field({ field, value, onChange, next }: FieldProps) {
 	} else if (field.type === 'text') {
 		return <TextField field={field} value={value as string | number} onChange={onChange} next={next} />;
 	} else if (field.type === 'select') {
-		return <SelectField field={field} />;
+		return <SelectField field={field} value={value as string | number} onChange={onChange} next={next} />;
 	} else if (field.type === 'multiselect') {
-		return <MultiSelect field={field} />;
+		return <MultiSelect field={field} value={value as string[] | number[]} onChange={onChange} next={next} />;
 	}
 }
 
@@ -202,8 +216,56 @@ function TextField({ field, value, onChange, next }: { field: TextFormField; val
 	);
 }
 
-function SelectField({ field }: { field: SelectFormField }) {
-	return <View></View>;
+function SelectField({ field, value, onChange, next }: { field: SelectFormField; value: string | number; onChange: (value: string | number) => any } & BasicFieldProps) {
+	const [showModal, setShowModal] = useState(false);
+
+	const toggle = () => setShowModal((s) => !s);
+
+	const selected = useMemo(() => field.options.find((o) => o.value === value)?.label, [value]);
+
+	return (
+		<View>
+			<Text>{field.label}</Text>
+			<TouchableNativeFeedback onPress={toggle}>
+				<View style={{ padding: 10, borderWidth: 1, borderColor: '#1d4ed8', borderRadius: 7, marginTop: 10 }}>
+					<Text style={{ color: '#9ca3af' }}>{selected}</Text>
+				</View>
+			</TouchableNativeFeedback>
+			<Modal visible={showModal} animationType='fade' transparent onRequestClose={toggle}>
+				<KeyboardAvoidingView behavior='height' style={{ flex: 1, justifyContent: 'flex-end' }}>
+					<TouchableWithoutFeedback onPress={toggle}>
+						<View style={[{ backgroundColor: '#0002' }, StyleSheet.absoluteFill]} />
+					</TouchableWithoutFeedback>
+					<View
+						style={{
+							height: '50%',
+							backgroundColor: '#fff',
+							borderTopLeftRadius: 20,
+							borderTopRightRadius: 20,
+							elevation: 10,
+							paddingTop: 30,
+							paddingHorizontal: 20,
+							paddingBottom: 20,
+						}}
+					>
+						<FlatList
+							data={field.options}
+							keyExtractor={(o) => o.value}
+							style={{ marginVertical: 10 }}
+							renderItem={({ item }) => {
+								const isSelected = value === item.value;
+								return (
+									<TouchableOpacity style={{ flexDirection: 'row', padding: 5, alignItems: 'center' }} onPress={() => onChange?.(item.value)}>
+										<Text>{item.label}</Text>
+									</TouchableOpacity>
+								);
+							}}
+						/>
+					</View>
+				</KeyboardAvoidingView>
+			</Modal>
+		</View>
+	);
 }
 
 function CheckField({
@@ -217,22 +279,18 @@ function CheckField({
 			<Text>{field.label}</Text>
 			<View style={styles.optionContainer}>
 				{field.options.map((option) => {
-					const isSelected = value === true || (Array.isArray(value) && value.find((f) => f == option.value));
+					const isSelected = value === true || (Array.isArray(value) && value.find((f) => f == option.value)),
+						handleChange = () =>
+							onChange?.(
+								field.options.length
+									? !isSelected
+									: isSelected
+									? ((value as string[] | number[]).filter((v) => v != option.value) as string[] | number[])
+									: ([...(value as string[] | number[]), option.value] as string[] | number[]),
+							);
 
 					return (
-						<TouchableOpacity
-							key={option.value}
-							style={styles.option}
-							onPress={() => {
-								onChange?.(
-									field.options.length
-										? !isSelected
-										: isSelected
-										? ((value as string[] | number[]).filter((v) => v != option.value) as string[] | number[])
-										: ([...(value as string[] | number[]), option.value] as string[] | number[]),
-								);
-							}}
-						>
+						<TouchableOpacity key={option.value} style={styles.option} onPress={handleChange}>
 							<Fontisto name={isSelected ? 'radio-btn-active' : 'radio-btn-passive'} size={18} color={isSelected ? '#1d4ed8' : '#9ca3af'} />
 							<Text style={styles.optionText}>{option.label}</Text>
 						</TouchableOpacity>
@@ -266,8 +324,91 @@ function RadioField({ field, value, onChange, next }: { field: RadioFormField; v
 	);
 }
 
-function MultiSelect({ field }: { field: MultiSelectFormField }) {
-	return <View></View>;
+function MultiSelect({
+	field,
+	value,
+	onChange,
+	next,
+}: { field: MultiSelectFormField; value: string[] | number[]; onChange: (value: string[] | number[]) => any } & BasicFieldProps) {
+	const [search, setSearch] = useState('');
+	const [showModal, setShowModal] = useState(false);
+
+	const selected = useMemo(() => {
+		const selected = [] as string[];
+
+		for (let i = 0; i < field.options.length; i++) {
+			const opt = field.options[i];
+
+			if (value && value.find((v) => v == opt.value)) {
+				selected.push(opt.label);
+			}
+		}
+
+		return selected.length ? selected.join(', ') : field.placeholder || '';
+	}, [field.options, value]);
+
+	const options = useMemo(() => {
+		return field.options.filter((opt) => opt.label.toLowerCase().includes(search.toLowerCase()));
+	}, [field.options, search]);
+
+	const toggle = () => setShowModal((s) => !s);
+
+	const select = (option: MultiSelectFormField['options'][0]) => {
+		setSearch('');
+		if (value.find((v) => v === option.value)) {
+			onChange?.(value.filter((v) => v !== option.value) as string[] | number[]);
+			return;
+		}
+		onChange?.([...value, option.value] as string[] | number[]);
+	};
+
+	return (
+		<View>
+			<Text>{field.label}</Text>
+			<TouchableNativeFeedback onPress={toggle}>
+				<View style={{ padding: 10, borderWidth: 1, borderColor: '#1d4ed8', borderRadius: 7, marginTop: 10 }}>
+					<Text style={{ color: '#9ca3af' }}>{selected}</Text>
+				</View>
+			</TouchableNativeFeedback>
+			<Modal visible={showModal} animationType='fade' transparent onRequestClose={toggle}>
+				<KeyboardAvoidingView behavior='height' style={{ flex: 1, justifyContent: 'flex-end' }}>
+					<TouchableWithoutFeedback onPress={toggle}>
+						<View style={[{ backgroundColor: '#0002' }, StyleSheet.absoluteFill]} />
+					</TouchableWithoutFeedback>
+					<View
+						style={{
+							height: '50%',
+							backgroundColor: '#fff',
+							borderTopLeftRadius: 20,
+							borderTopRightRadius: 20,
+							elevation: 10,
+							paddingTop: 30,
+							paddingHorizontal: 20,
+							paddingBottom: 20,
+						}}
+					>
+						<View style={{ borderColor: '#9ca3af', borderWidth: 1, padding: 5, borderRadius: 8 }}>
+							<TextInput value={search} onChangeText={setSearch} placeholder='search' />
+						</View>
+						<FlatList
+							data={options}
+							keyExtractor={(o) => o.value}
+							style={{ marginVertical: 10 }}
+							renderItem={({ item }) => {
+								const isSelected = value.find((v) => v == item.value);
+								return (
+									<TouchableOpacity style={{ flexDirection: 'row', padding: 5, alignItems: 'center' }} onPress={() => select(item)}>
+										<Feather name={isSelected ? 'check-square' : 'square'} size={20} color={isSelected ? '#16a34a' : '#9ca3af'} style={{ marginRight: 5 }} />
+										<Text>{item.label}</Text>
+									</TouchableOpacity>
+								);
+							}}
+						/>
+					</View>
+				</KeyboardAvoidingView>
+			</Modal>
+		</View>
+	);
 }
 
 const styles = StyleSheet.create({
